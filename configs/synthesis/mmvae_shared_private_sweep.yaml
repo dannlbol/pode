@@ -1,0 +1,40 @@
+# Broad, staged shared/private MMVAE search. This is intentionally separate
+# from mmvae_sweep.yaml so the established shared-latent v2 workflow is intact.
+staged: true
+cv_folds: 3
+fold_seed: 0
+enforce_quality_guards: true
+
+# Exact v2 architecture/sampler starting point. Stage-specific axes override
+# only the fields named below.
+fixed:
+  fusion.strategy: moe
+  objective.weighting_scheme: uncertainty
+  objective.beta_max: 0.25
+  objective.free_bits: 0.02
+  generation.observation_sampler: residual_factor
+  generation.residual_rank: 16
+  generation.observation_noise_scale: {expression: 0.75, methylation: 1.0}
+  generation.gmm_components: 10
+  generation.posterior_samples_per_patient: 4
+
+stages:
+  screening_max_epochs: 150
+  finalist_max_epochs: 1500
+  shared_latent_dims: [16, 32, 64]
+  private_latent_presets:
+    - {default: 4}
+    - {default: 8}
+    - {expression: 8, methylation: 16}
+    - {default: 16}
+  private_kl_weights: [0.25, 0.5, 1.0]
+  fusion: [poe, moe, mopoe]
+  weighting: [fixed, uncertainty]
+  beta_max: [0.1, 0.25, 0.5]
+  retain_architectures: 6
+  posterior_draws: [1, 2, 4]
+  gmm_components: [2, 5, 10]
+  residual_ranks: [0, 8, 16, 32]
+  common_noise_scales: [0.25, 0.5, 0.75, 1.0]
+  retain_finalists: 3
+  finalist_seeds: [0, 1, 2]

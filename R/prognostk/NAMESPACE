@@ -1,0 +1,39 @@
+# Generated/maintained by hand for prognostk.
+
+# --- config ---
+export(load_config)
+export(validate_config)
+export(col_of)
+S3method(print, prognostk_config)
+
+# --- metrics: survival ---
+export(fit_cox)
+export(predict_survival_at_time)
+export(bootstrap_survival_ci)
+export(validate_frozen_model)
+export(assign_risk_groups)
+
+# --- metrics: cutoffs ---
+export(optimise_cutoffs)
+
+# --- metrics: calibration / validation ---
+export(calibration_table)
+export(external_validate)
+
+# --- visualisation ---
+export(theme_pub)
+export(format_pvalue)
+export(prognostk_palette)
+export(plot_km)
+export(plot_distribution)
+export(plot_forest)
+export(plot_calibration)
+export(plot_individual_curves)
+export(plot_oncoplot)
+
+importFrom(survival, Surv, coxph, survfit, cox.zph, concordance)
+importFrom(rlang, .data)
+importFrom(stats, as.formula, approx, aov, coef, complete.cases, delete.response,
+           median, model.matrix, offset, predict, qnorm, quantile, sd, setNames, t.test, terms)
+importFrom(grDevices, cairo_pdf, dev.off, hcl.colors, pdf, png)
+importFrom(utils, head, tail, combn)

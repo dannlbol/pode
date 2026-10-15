@@ -1,0 +1,33 @@
+# Broad compressor sweep for `scripts/run_hybrid.py tune`.
+#
+# This is intentionally wider than the original starter sweep:
+# - compares 16 / 32 / 64 latent spaces
+# - checks KL pressure via `beta_max`, `free_bits`, and `kl_warmup_epochs`
+# - checks survival pressure via `w_surv`
+# - repeats over multiple seeds and lets the tuner aggregate results across seeds
+#
+# `epochs` stays at 100 for the broad pass. Increase it only after a stable
+# region emerges; otherwise you are paying a large runtime cost before you know
+# which part of the space is worth refining.
+compressor: survival_vae
+synthesizer: gmm
+tuning_objective: latents_survival
+
+fixed:
+  epochs: 100
+
+grid:
+  seed: [0, 1, 2]
+  n_latent: [16, 32, 64]
+  n_top_genes: [0, 2000]
+  w_surv: [0.5, 1.0, 2.0]
+  beta_max: [0.5, 1.0]
+  free_bits: [0.02, 0.05]
+  kl_warmup_epochs: [20, 40]
+
+metric_weights:
+  reconstruction_mse: 1.0
+  concordance_gap: 1.0
+  km_iad: 1.0
+  latent_cov_relgap: 1.0
+  hr_logcorr_penalty: 1.0

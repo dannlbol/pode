@@ -1,0 +1,85 @@
+# =============================================================================
+# prognostk project configuration (TEMPLATE)
+# -----------------------------------------------------------------------------
+# Copy this file, rename it (e.g. config.myproject.yaml), and edit the values to
+# match YOUR dataset. Every prognostk function reads its defaults from a config
+# like this one; any value can still be overridden by passing it directly as a
+# function argument. Nothing here is specific to a disease — the placeholders
+# below simply describe the ROLE each of your columns plays.
+#
+# See config.schema.md for the full description of every key and its validation
+# rules. A worked, filled-in example is in config.example.yaml.
+# =============================================================================
+
+# --- Column roles ------------------------------------------------------------
+# Map the columns in YOUR data frame to the roles prognostk understands.
+columns:
+  id: sample_id            # unique sample/patient identifier
+  time: time               # survival / follow-up time (numeric)
+  status: status           # event indicator: 1 = event occurred, 0 = censored
+  score: score             # the continuous biomarker / prognostic score
+  group: risk_group        # (optional) a pre-computed risk-tier factor column
+  # Cox model terms. Prefix a term with "strata:" to enter it as a stratum
+  # rather than a modelled covariate (e.g. "strata:subgroup").
+  covariates: [score]
+  # Categorical columns to show as oncoplot annotation tracks / distribution facets.
+  categorical: [group_a, group_b]
+
+# --- Survival settings -------------------------------------------------------
+survival:
+  horizon: 5               # time at which survival is predicted / monitored
+  time_unit: years         # label only (used on axes)
+  landmark_offset: null    # e.g. 5 for a post-5yr landmark analysis; null = none
+  bootstrap:
+    n: 1000                # bootstrap resamples for CI / bias correction
+    conf: 0.95             # confidence level
+    seed: 42               # RNG seed for reproducibility
+
+# --- Risk groups -------------------------------------------------------------
+# Thresholds are applied to predicted survival (descending). N labels must be
+# exactly one more than N thresholds. Highest tier first.
+risk_groups:
+  thresholds: [0.90, 0.75, 0.50]
+  labels: ["Favourable", "Standard", "High", "VeryHigh"]
+
+# --- Palettes ----------------------------------------------------------------
+# All colours are configurable so conventions can change per tumour/setting.
+palettes:
+  # Named colours for each risk-group label above.
+  risk:
+    Favourable: "#2A9D8F"
+    Standard:   "#457B9D"
+    High:       "#F4A261"
+    VeryHigh:   "#E63946"
+  # Colours for cohorts in two-cohort comparisons.
+  cohort:
+    discovery:  "#08519C"
+    validation: "#D6604D"
+  # Continuous colour ramp (low, mid, high) for heatmaps / score gradients.
+  heatmap: ["#00008B", "#EEE9E9", "#8B0000"]
+  # Per-variable colour maps for oncoplot categorical tracks. Optional; if a
+  # track's variable is not listed a categorical palette is auto-generated.
+  # Example:
+  #   sex: {M: "#FFFFFF", F: "#000000", Unknown: "#D3D3D3"}
+  categorical: {}
+
+# --- Oncoplot annotation tracks ----------------------------------------------
+# Ordered list of annotation tracks drawn above the heatmap body.
+# type: "points"  -> anno_points (numeric, optional baseline line, optional status_col)
+#       "categorical" -> anno_simple coloured strip (uses palettes.categorical[column])
+#       "line"    -> anno_lines (numeric)
+oncoplot:
+  tracks:
+    - {name: Score, column: score, type: line}
+    - {name: GroupA, column: group_a, type: categorical}
+    - {name: GroupB, column: group_b, type: categorical}
+
+# --- Figure output -----------------------------------------------------------
+figure:
+  page:
+    width_in: 7.09         # A4 width in inches
+    height_in: 10.51       # A4 height in inches
+    base_size: 8           # base ggplot/matplotlib font size (pt)
+  device: pdf              # pdf | cairo_pdf | png
+  dpi: 300                 # raster resolution (png only)
+  outdir: ./figures        # directory where figures are written

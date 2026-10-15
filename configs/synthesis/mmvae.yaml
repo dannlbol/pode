@@ -1,0 +1,116 @@
+# Configuration for the joint multimodal VAE (deliverable 2).
+# Mirrors synthvae.mmvae.model.MMVAEConfig. The commented alternatives enumerate
+# the options an agent should sweep / implement (see docs/SPECIFICATION.md).
+
+dims:
+  # set from data at build time; shown here for reference
+  tabular_dim: null
+  expression_dim: null
+  n_time_bins: 20
+  latent_dim: 32
+  # `shared` is the compatibility/default path. Enable private molecular
+  # posteriors explicitly for the shared/private experiment.
+  latent_structure: shared          # shared | shared_private
+  private_latent_dims: {}           # e.g. {default: 8, methylation: 16}
+
+architecture:
+  encoder_hidden: [512, 256]
+  tabular_head_hidden: [128]
+  expression_head_hidden: [256, 512]
+  # methylation is an optional 4th modality; these entries apply only when
+  # `--methylation` is supplied and are inert for the default 3-modality run.
+  methylation_head_hidden: [256, 512]
+  survival_head_hidden: [64]
+  dropout: 0.1
+
+fusion:
+  strategy: poe            # poe | moe | mopoe
+  gating: true             # data-dependent per-modality weighting
+  include_prior_expert: true
+
+likelihoods:
+  expression: gaussian     # gaussian | nb | zinb   (nb/zinb are TODO in heads.py)
+  methylation: gaussian    # gaussian on M-values (logit of beta); only option
+
+# Optional heads supplied with repeated `--omic NAME=PATH`.  The legacy
+# --expression and --methylation flags remain supported.  Declare every generic
+# input here so the model can validate, transform, and score it consistently.
+#
+# Every modality declared here must be supplied at run time (a declared-but-
+# absent input errors out), so keep the block commented in the default config and
+# uncomment only the heads you actually feed.
+#
+# DNA copy number is wired in two ways.  Produce the matrices offline with
+# synthvae.data.copy_number.segments_to_matrix, then pass them as --omic inputs:
+#   --omic cnv=cnv_continuous.csv                          (continuous default)
+#   --omic cnv_gain=cnv_gl.csv  --omic cnv_loss=cnv_gl.csv (discrete variant)
+# modalities:
+#   cnv:
+#     kind: continuous       # Gaussian on standardized log2 copy-number ratios
+#     head_hidden: [256, 512]
+#   # Discrete gain/loss route (gain_loss_binary encoding); Bernoulli heads that
+#   # require a strict 0/1 matrix.
+#   cnv_gain:
+#     kind: binary
+#     head_hidden: [128]
+#   cnv_loss:
+#     kind: binary
+#     head_hidden: [128]
+#   mutations:
+#     kind: binary           # Bernoulli head; input must contain only 0/1
+#   atac:
+#     kind: count
+#     likelihood: zinb       # count | continuous | methylation | binary
+
+objective:
+  weighting_scheme: uncertainty   # fixed | uncertainty | gradnorm
+  fixed_weights:                  # used only when weighting_scheme=fixed
+    tabular: 1.0
+    expression: 1.0
+    methylation: 1.0              # applies only when --methylation is supplied
+    survival: 2.0                 # bias toward preserving survival
+  beta_max: 1.0
+  free_bits: 0.02
+  kl_warmup_epochs: 20
+  recon_reduction: mean_per_feature   # per-gene scale so high-dim expression
+                                      # does not swamp survival/tabular terms
+  gradnorm_alpha: 1.5             # asymmetry for gradnorm targets
+  private_kl_weight: 1.0          # used only by shared_private
+
+optimisation:
+  lr: 0.001
+  weight_decay: 0.00001
+  batch_size: 128
+  max_epochs: 300
+  patience: 25
+  val_fraction: 0.15
+  seed: 0
+  device: auto
+  verbose: false
+
+generation:
+  latent_source: posterior        # posterior (GMM on encoded z) | prior
+  gmm_components: 10
+  # Fit the GMM to posterior draws, not only posterior means, so generation
+  # retains latent uncertainty.  Larger values cost only the one-time GMM fit.
+  posterior_samples_per_patient: 4
+  # Joint Gaussian heads use correlated, real-residual factors instead of
+  # independent feature-wise white noise.  Old checkpoints retain their saved
+  # sampler behaviour.
+  observation_sampler: residual_factor  # mean | independent | residual_factor
+  residual_rank: 16
+  observation_noise_scale:
+    expression: 0.5
+    methylation: 0.75
+
+# The experiment matrix worth running once the loop is implemented.
+sweeps:
+  fusion.strategy: [poe, moe, mopoe]
+  fusion.gating: [true, false]
+  objective.weighting_scheme: [fixed, uncertainty]
+  objective.beta_max: [0.25, 0.5, 1.0]
+  objective.free_bits: [0.0, 0.02, 0.05]
+  dims.latent_dim: [16, 32, 64]
+  generation.residual_rank: [8, 16, 32]
+  generation.gmm_components: [2, 5, 10]
+  generation.posterior_samples_per_patient: [1, 2, 4]

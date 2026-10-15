@@ -1,0 +1,33 @@
+# Reversible follow-up to the broad shared/private architecture sweep.
+#
+# Supply the preceding selected_config.json with --config.  The neural
+# architecture, latent density settings, fusion, objective and optimiser are
+# held fixed.  Each CV fold is fitted once and reused while residual-factor
+# rank/noise settings are calibrated without neural retraining.
+staged: true
+calibration_only: true
+cv_folds: 3
+fold_seed: 0
+enforce_quality_guards: true
+fixed: {}
+
+stages:
+  screening_max_epochs: 150
+  finalist_max_epochs: 1500
+
+  # Stage 1 ranks boundary/local-density diagnostics but does not hard-reject
+  # short held-out fits. Hard guards apply to the multi-seed finalist stage.
+
+  # Deliberately exclude the rank-32/full-noise setting selected by the broad
+  # sweep: it restored global variance but produced source-specific boundary
+  # arcs in fixed-real expression and methylation UMAPs.
+  residual_ranks: [0, 8, 16]
+  common_noise_scales: [0.25, 0.5, 0.75]
+  asymmetric_noise_scales:
+    - {expression: 0.25, methylation: 0.5}
+    - {expression: 0.5, methylation: 0.75}
+
+  screening_replicates: 3
+  retain_finalists: 3
+  finalist_seeds: [0, 1, 2]
+  finalist_replicates: 3

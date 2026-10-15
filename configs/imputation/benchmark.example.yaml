@@ -1,0 +1,113 @@
+# Imputation benchmark config (pode synthesis impute benchmark --impute-config ...).
+# Set up for a hybrid-bundle training table such as
+#   <run_dir>/pode_prep/training_table.csv
+# (clinical columns + expr_latent_* + methylation_latent_* + OS_Time/OS_Status).
+# Every key is optional; omitted keys take the defaults in pode/imputation/config.py.
+
+m: 20                 # imputations (draws) per incomplete row
+seed: 42
+n_jobs: 4             # max CPU cores (scoring workers, MICE chains, BLAS/torch threads); -1 = all
+mode: kfold           # kfold (fit on train folds, impute held-out) | transductive
+folds: 5
+repeats: 1
+mask_training_rows: false   # true: training folds are masked too (incomplete-cohort setting)
+
+protect_survival: true      # never hide OS_Time / OS_Status
+protect_columns: []
+
+# What the imputer may see (engines can override these in their params).
+outcome_policy: use         # use (inference) | hide (prediction validation) | exclude
+outcome_columns: []         # empty -> survival time/event columns
+exclude_columns: []         # e.g. post-baseline variables, never seen or imputed
+fit_scope: stacked          # knn/mice/missforest: stacked | reference (learn from training rows only)
+
+# Named column groups for block (absent-modality) masking. Latents derived from
+# one omics assay are all present or all absent for a patient, so the groups
+# are atomic: scattered-gap masks never touch them, and they are only hidden
+# whole (set atomic_blocks: false only for data where partial blocks are real).
+block_groups:
+  expr: ["expr_latent_*"]
+  meth: ["methylation_latent_*"]
+atomic_blocks: true
+
+# Realistic patterns for a clinical + expression + methylation cohort: scattered
+# gaps occur only in clinical columns; each modality is absent for ~30% of
+# patients, independently (so ~9% lack both).
+scenarios:
+  - {name: clinical_mcar_10, kind: mcar, rate: 0.10}
+  - {name: clinical_mcar_30, kind: mcar, rate: 0.30}
+  - {name: clinical_mar_subgroup_age, kind: mar, rate: 0.30, drivers: [MNP_Subgroup, Age]}
+  - {name: expr_absent_30, kind: block, group: expr, row_frac: 0.30}
+  - {name: meth_absent_30, kind: block, group: meth, row_frac: 0.30}
+  - name: modalities_absent_30_30
+    kind: union
+    parts:
+      - {kind: block, group: expr, row_frac: 0.30}
+      - {kind: block, group: meth, row_frac: 0.30}
+  # Headline scenario: what a real cohort looks like.
+  - name: realistic_mixed
+    kind: union
+    parts:
+      - {kind: mcar, rate: 0.10}
+      - {kind: block, group: expr, row_frac: 0.30}
+      - {kind: block, group: meth, row_frac: 0.30}
+  - {name: age_upper_tail, kind: tail, columns: [Age], quantile: 0.8, side: upper, rate: 1.0}
+  - {name: rare_subgroup, kind: rare_category, columns: [MNP_Subgroup], max_freq: 0.2, rate: 0.7}
+  # Stress test: missingness depends on the hidden value itself (MNAR).
+  # - {name: clinical_mnar_age, kind: mnar_self, columns: [Age], rate: 0.3, strength: 2.0}
+
+engines:
+  - mean_mode
+  - knn
+  - mice
+  - missforest
+  - gain
+  - tvae-decoder
+  - tvae-masked
+  # MICE for scattered gaps, mask-aware TVAE for rows with an absent block.
+  - {name: hybrid, params: {gap_engine: mice, block_engine: tvae-masked, block_min_frac: 1.0}}
+  # Same MICE, but rows never see their own outcome: quantifies the cost of
+  # prediction-safe imputation (expect Cox HRs attenuated toward 1).
+  - {name: mice, label: mice-hide-outcome, params: {outcome_policy: hide}}
+  # Per-engine overrides go in params, and a label lets one engine appear twice:
+  # - {name: tvae-decoder, label: tvae-decoder-sir, params: {method: sir, k: 5000}}
+
+# Epochs for TVAE fits inside the benchmark (None -> the PODE config's synthesizer.epochs).
+epochs: 500
+
+latent:
+  k: 2000             # importance samples per row
+  method: auto        # sir | pcn | smc | auto (SIR; rows with ESS < m -> SMC, or pCN with an encoder)
+  smc_mutation_steps: 5
+  smc_target_ess: 0.5
+  pcn_steps: 200
+  pcn_beta: 0.2
+  likelihood_power: null   # null -> the model's loss_factor
+
+masked_tvae:
+  p_max: 0.5          # per-row artificial masking rate ~ U(0, p_max)
+  block_prob: 0.25    # chance a row also drops one whole block group
+  hidden_weight: 2.0
+  beta: 1.0
+  epochs: null        # null -> top-level epochs
+
+gain:
+  epochs: 1000
+  batch_size: 128
+  hint_rate: 0.9
+  alpha: 100.0
+
+cox:
+  enabled: true
+  mode: univariate    # univariate | multivariable
+  covariates: [Age, Sex, MNP_Subgroup, M._versus_M., ConsensusMYC, WCA, "expr_latent_[0-3]", "methylation_latent_[0-3]"]
+  max_covariates: 25
+  penalizer: 0.0
+
+delta:
+  enabled: true
+  deltas: [-1.0, -0.5, 0.0, 0.5, 1.0]
+  columns: []         # empty -> every imputed continuous/binary column
+  engines: []         # empty -> all engines
+
+plots: true

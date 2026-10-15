@@ -1,0 +1,35 @@
+# Balanced, modality-aware MMVAE sweep.
+#
+# Every neural architecture is trained on the same three subgroup/event-
+# stratified folds. Generation-only presets reuse those fitted networks, so
+# residual rank/noise and latent-density calibration do not retrain the VAE.
+cv_folds: 3
+synthetic_replicates: 3
+enforce_quality_guards: true
+tuning_objective: balanced_survival_molecular
+
+fixed:
+  optimisation.max_epochs: 150
+  optimisation.seed: 0
+  objective.free_bits: 0.02
+  generation.observation_sampler: residual_factor
+
+grid:
+  fusion.strategy: [poe, moe, mopoe]
+  objective.weighting_scheme: [fixed, uncertainty]
+  objective.beta_max: [0.25, 0.5]
+  dims.latent_dim: [16, 32]
+  # Presets sample the requested calibration ranges without an impractical full
+  # Cartesian product. They are evaluated as a cheap second stage on each fitted
+  # architecture.
+  generation.preset:
+    - {residual_rank: 8,  observation_noise_scale: {expression: 0.25, methylation: 0.5},  gmm_components: 2,  posterior_samples_per_patient: 1}
+    - {residual_rank: 8,  observation_noise_scale: {expression: 0.5,  methylation: 0.75}, gmm_components: 5,  posterior_samples_per_patient: 2}
+    - {residual_rank: 16, observation_noise_scale: {expression: 0.5,  methylation: 0.75}, gmm_components: 5,  posterior_samples_per_patient: 2}
+    - {residual_rank: 16, observation_noise_scale: {expression: 0.75, methylation: 1.0},  gmm_components: 10, posterior_samples_per_patient: 4}
+    - {residual_rank: 32, observation_noise_scale: {expression: 0.5,  methylation: 0.75}, gmm_components: 10, posterior_samples_per_patient: 4}
+
+metric_weights:
+  concordance_gap: 1.0
+  km_iad_late: 1.0
+  hr_logcorr_penalty: 1.0

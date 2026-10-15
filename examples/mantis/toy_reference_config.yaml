@@ -1,0 +1,47 @@
+data:
+  conn_mat_path: data/conn_mat_beta.csv
+  conn_mat_is_one_based: true
+  time_bins:
+  - 0.02
+  - 0.33
+  - 0.58
+  - 0.75
+  - 0.94
+  - 1.17
+  - 1.5
+  - 1.83
+  - 2.08
+  - 2.58
+  - 3.25
+  - 3.9
+  - 5.67
+  - 8.29
+  - 22.0
+  toy_train_a_surv_path: data/surv_toy_train_a.csv
+  toy_train_b_surv_path: data/surv_toy_train_b.csv
+run_setup:
+  training_cohorts:
+  - toy_train_a
+  - toy_train_b
+  feature_types:
+  - beta
+  - cnv
+  metastasis_recoding:
+    from: 0
+    to: -1
+model:
+  part1:
+    input_dim: 250
+    layer_dims:
+    - 50
+    - 16
+    - 8
+    - 4
+    dropout_rate: 0.2
+    c2_input_offset: 200
+  part2:
+    num_time_bins: 15
+    dropout_rate: 0.2
+  combined:
+    num_clinical_features: 1
+    clinical_feature_weight: -4.4

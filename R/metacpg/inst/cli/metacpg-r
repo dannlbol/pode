@@ -1,0 +1,21 @@
+#!/usr/bin/env Rscript
+args <- commandArgs(trailingOnly = TRUE)
+usage <- function() stop("usage: metacpg-r run|search|extract|validate|submit|worker|aggregate --config FILE [options]", call. = FALSE)
+if (!length(args)) usage()
+command <- args[[1]]; args <- args[-1]
+value <- function(flag, default = NULL) { i <- match(flag, args); if (is.na(i) || i == length(args)) default else args[[i + 1]] }
+config <- value("--config"); if (is.null(config)) usage()
+backend <- value("--backend", "local"); dry <- "--dry-run" %in% args
+count <- value("--feature-count"); if (!is.null(count)) count <- as.integer(count)
+phase <- value("--phase"); run_id <- value("--run-id")
+suppressPackageStartupMessages(library(metaCpG))
+cfg <- read_config(config)
+result <- switch(command,
+  validate = { validate_inputs(cfg); list(valid = TRUE) },
+  submit = submit_slurm(cfg, dry),
+  worker = { if (is.null(phase)||is.null(count)||is.null(run_id)) usage(); run_worker(cfg,phase,count,run_id) },
+  aggregate = { if (is.null(count)||is.null(run_id)) usage(); aggregate_run(cfg,run_id,count) },
+  search = { x <- search_features(cfg); lapply(x, dim) },
+  extract = fit_metacpg(cfg, feature_count = count)$performance,
+  run = run_pipeline(cfg, backend, dry, count), usage())
+cat(jsonlite::toJSON(result[c("output_dir","performance","scripts","submitted","valid","run_id","job_ids","phase","feature_count","tasks","cox_fits_executed")], auto_unbox = TRUE, pretty = TRUE, null = "null"), "\n")

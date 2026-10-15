@@ -1,0 +1,29 @@
+# Toy augmentation benchmark on examples/cohort.csv (200 patients, OS in years).
+# A minutes-long demonstration of every moving part; see benchmark.example.yaml
+# for the fully commented template.
+#
+#   pode synthesis augment benchmark --data examples/cohort.csv \
+#       --augment-config configs/augmentation/toy.example.yaml --output-dir runs/augment_toy --quick
+
+n_jobs: 4
+id_column: Sample_ID
+endpoint: {time: OS_Time, event: OS_Status, horizon: 3}
+splits: {folds: 5, repeats: 1, stratify: [MNP_Subgroup]}
+generator:
+  exclude_columns: [Sample_ID, PFS_Time, PFS_Status]
+  epochs: 300
+strata: [MNP_Subgroup]
+subgroups: [MNP_Subgroup, M_stage]
+min_subgroup_n: 10
+min_subgroup_events: 3
+ratios: [0.5, 1.0]
+draws: 2
+strategies:
+  - tvae_natural
+  - {kind: tvae_targeted, label: tvae_mycamp, target: {equals: {ConsensusMYC: 1}}}
+  - {kind: duplicate, label: duplicate_mycamp, target: {equals: {ConsensusMYC: 1}}}
+  - {kind: jitter, params: {sd_frac: 0.1}}
+models:
+  - {kind: coxnet, features: [Age, MNP_Subgroup, ConsensusMYC, M_stage, "cg*"]}
+  - {kind: metacpg_fixed, features: ["cg*"], params: {m_value_columns: ["cg*"]}}
+learning_curve: {fractions: [0.5, 0.75], draws: 1}

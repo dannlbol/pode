@@ -1,0 +1,11 @@
+{
+  "R": {"Version": "4.5.1", "Repositories": [{"Name": "CRAN", "URL": "https://cloud.r-project.org"}]},
+  "Packages": {
+    "jsonlite": {"Package": "jsonlite", "Version": "2.0.0", "Source": "Repository", "Repository": "CRAN"},
+    "meta": {"Package": "meta", "Version": "8.2-1", "Source": "Repository", "Repository": "CRAN"},
+    "survival": {"Package": "survival", "Version": "3.8-3", "Source": "Repository", "Repository": "CRAN"},
+    "survivalROC": {"Package": "survivalROC", "Version": "1.0.3.1", "Source": "Repository", "Repository": "CRAN"},
+    "yaml": {"Package": "yaml", "Version": "2.3.11", "Source": "Repository", "Repository": "CRAN"}
+  }
+}
+

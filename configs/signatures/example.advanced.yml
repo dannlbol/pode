@@ -1,0 +1,250 @@
+# =============================================================================
+# PODE advanced prognostic-signature configuration (schema v2)
+# =============================================================================
+# Full field-by-field reference: docs/signatures/methods.md
+# Quick start / evaluation semantics: docs/signatures/advanced.md
+#
+# Regenerate the example inputs referenced below with:
+#   python examples/signatures/generate_multiomics.py
+# Then:
+#   pode signatures methods                       # list methods + availability
+#   pode signatures validate --config <this file> # structural + data checks
+#   pode signatures run       --config <this file> --method elastic_net_cox
+#   pode signatures benchmark --config <this file> --preset quick|balanced|exhaustive
+# =============================================================================
+
+schema_version: 2                       # must be 2 for the advanced workflow
+analysis_id: advanced_multiomics_example  # [A-Za-z0-9_.-]; names output + SLURM jobs
+
+# --- Sample alignment ---------------------------------------------------------
+alignment:
+  mode: sample_id        # sample_id (join on IDs, allows missing blocks) | row_order
+  sample_policy: union   # only "union" is supported (keep every phenotype sample)
+
+# --- Phenotype table ----------------------------------------------------------
+phenotype:
+  path: ../../examples/signatures/phenotype.csv
+  sample_id_column: sample_id
+  # cohort_column names the SOURCE each training sample came from (different trials,
+  # eras, batches). All cohorts TRAIN TOGETHER -- this is not a train/test split.
+  # It declares that the sources may have different underlying survival rates, so
+  # methods that support it give each cohort its own baseline hazard via a stratified
+  # Cox partial likelihood (coefficients stay shared). hierarchical_cox / maml_cox /
+  # frailty_cox model cohort structure explicitly and REQUIRE this key. The three
+  # scikit-survival methods cannot represent cohorts at all: they run pooled and are
+  # flagged with cohort_handling: ignored (see cohort_handling below).
+  # Outer folds are balanced on cohort x event; for cross-cohort external validation
+  # set evaluation.cohort_validation: leave_one_cohort_out explicitly.
+  cohort_column: cohort
+  # What to do with methods that cannot honour cohort_column:
+  #   warn (default) -> run them pooled and flag the result loudly
+  #   skip           -> record them as "skipped" in the benchmark leaderboard
+  # cohort_handling: warn
+
+# --- Omics blocks (>=1) -------------------------------------------------------
+# Each block is standardized within training folds. Samples may omit whole blocks
+# under mode: sample_id; the missing block is zero-filled and a presence mask is
+# passed to the model. transform: none | log1p | beta_to_m.
+omics:
+  - name: expression
+    path: ../../examples/signatures/expression.csv
+    orientation: samples_by_features   # | features_by_samples (needs feature_id_column)
+    sample_id_column: sample_id
+    transform: none
+    standardize: true
+  - name: methylation
+    path: ../../examples/signatures/methylation.csv
+    orientation: samples_by_features
+    sample_id_column: sample_id
+    transform: beta_to_m               # logit of beta values (requires 0<beta<1)
+    standardize: true
+
+# --- Endpoints (>=1 right-censored task) -------------------------------------
+# Each endpoint is a separate prediction task with its own signature/head.
+# prediction_time sets the horizon for time-dependent AUC / Brier metrics.
+endpoints:
+  - name: overall_survival
+    time: os_time
+    status: os_event        # 0 = censored, 1 = event
+    prediction_time: 5
+  - name: progression_free_survival
+    time: pfs_time
+    status: pfs_event
+    prediction_time: 3
+
+# --- Clinical covariates (optional) ------------------------------------------
+# Covariates are incorporated by EVERY method. For the linear / boosting / latent
+# / multi-study family they are MANDATORY, UNPENALISED adjustment terms that are
+# never selected and never counted toward the omics feature count. For the deep
+# and scikit-survival families they enter as ordinary input features. They must be
+# unpenalised: `penalized: false` is required (any other value is rejected).
+#   type: numeric      -> median-imputed, used as-is
+#   type: categorical  -> one-hot encoded, first level is the reference
+covariates:
+  - column: age
+    type: numeric
+    penalized: false
+  - column: subgroup
+    type: categorical
+    penalized: false
+
+# --- Methods ------------------------------------------------------------------
+methods:
+  # Every registered method is enabled here so the example doubles as a coverage
+  # smoke test. `pode signatures methods` prints each method's family, maturity,
+  # and required inputs. Trim this list for a real analysis.
+  enabled:
+    - elastic_net_cox
+    - coxboost
+    - stability_coxboost
+    - pls_cox_multiblock
+    # The following three require the optional scikit-survival dependency
+    # (pip install -e '.[signatures-advanced]').
+    - random_survival_forest
+    - gradient_boosted_survival
+    - survival_svm
+    - deepsurv
+    - autoencoder_cox
+    - net_cox
+    - cox_nnet
+    - surv_transformer
+    - prototype_contrastive_survival
+    - moli_survival
+    - hierarchical_cox
+    - maml_cox
+    - frailty_cox
+
+  # Per-method parameters. For every key not listed the built-in default applies
+  # (defaults are documented in docs/signatures/methods.md and in the comments
+  # below). Base scalar values fix a parameter; a `search_space:` block turns a
+  # parameter into a GRID that is tuned per outer fold by inner cross-validation
+  # (best params x feature_count chosen by Harrell's C). This is what makes the
+  # benchmark leaderboard a fair contest instead of comparing hand-picked points.
+  #
+  #   * search_space values must be non-empty lists; the engine tries the full
+  #     Cartesian product of the axes.
+  #   * Use dotted keys for nested parameters, e.g. `params.n_estimators` for the
+  #     scikit-survival methods.
+  #   * Presets truncate each axis: `quick` keeps the first 2 values (stable
+  #     methods only), `balanced` the first 3, `exhaustive` uses the FULL grid
+  #     and full epochs -- exhaustive over every method below is slow.
+  #
+  # Base epochs/iterations are kept small so the example runs quickly; raise them
+  # (epochs, max_iter, steps, repetitions) for a real analysis.
+  config:
+    # --- Penalised Cox ---
+    elastic_net_cox:                    # defaults: l1=0.002 l2=0.01 max_iter=500 learning_rate=0.2
+      max_iter: 200
+      search_space:
+        l1: [0.001, 0.005, 0.02]        # L1 (sparsity) penalty on omics coefficients
+        l2: [0.001, 0.01]               # L2 (ridge) penalty on omics coefficients
+
+    # --- Boosting ---
+    coxboost:                           # defaults: steps=100 learning_rate=0.05
+      search_space:
+        steps: [30, 60]                 # boosting iterations
+        learning_rate: [0.03, 0.05]     # shrinkage per step
+
+    # --- Stability selection ---
+    stability_coxboost:                 # defaults: repetitions=20 threshold=0.6 steps=60 learning_rate=0.05
+      repetitions: 10
+      steps: 30
+      search_space:
+        threshold: [0.5, 0.6]           # selection-frequency cutoff for keeping a feature
+
+    # --- Latent / multiblock ---
+    pls_cox_multiblock:                 # default: components=3
+      search_space:
+        components: [2, 3, 4]           # number of PLS latent components
+
+    # --- scikit-survival (params are passed straight to the estimator) ---
+    random_survival_forest:             # sksurv RandomSurvivalForest (n_estimators=100, min_samples_leaf=3)
+      search_space:
+        params.n_estimators: [50, 100]
+        params.min_samples_leaf: [3, 5]
+    gradient_boosted_survival:          # sksurv GradientBoostingSurvivalAnalysis (n_estimators=100, learning_rate=0.05, max_depth=2)
+      search_space:
+        params.learning_rate: [0.05, 0.1]
+        params.max_depth: [2, 3]
+    survival_svm:                       # sksurv FastSurvivalSVM (alpha=1.0, rank_ratio=1.0, max_iter=100)
+      search_space:
+        params.alpha: [0.5, 1.0, 2.0]
+
+    # --- Deep survival (defaults: epochs=80 hidden=32 learning_rate=0.001;
+    #     dropout 0.1 and weight_decay 1e-4 are fixed, not tunable) ---
+    deepsurv:
+      epochs: 20
+      search_space:
+        hidden: [16, 32]                # hidden width
+    autoencoder_cox:
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+    surv_transformer:
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+    prototype_contrastive_survival:
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+    moli_survival:
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+
+    # --- Graph / pathway informed ---
+    net_cox:                            # defaults: l1=0.001 l2=0.01 graph_strength=0.1 max_iter=500
+      graph_path: ../../examples/signatures/example_feature_graph.csv  # CSV: source,target[,weight]
+      max_iter: 200
+      search_space:
+        graph_strength: [0.05, 0.1, 0.2]  # weight of the graph-Laplacian penalty
+    cox_nnet:                           # deep defaults + required pathway mask
+      pathway_path: ../../examples/signatures/example_pathways.csv     # CSV: feature_index,pathway_index
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+
+    # --- Multi-study / cohort-aware (require phenotype.cohort_column) ---
+    hierarchical_cox:                   # defaults: l1=0.001 deviation_penalty=0.1
+      search_space:
+        deviation_penalty: [0.1, 0.5]   # shrinkage of per-cohort deviations toward the shared effect
+    maml_cox:                           # deep defaults; first-order meta-learning across cohorts
+      epochs: 20
+      search_space:
+        hidden: [16, 32]
+    frailty_cox:                        # default: frailty_penalty=1.0
+      search_space:
+        frailty_penalty: [0.5, 1.0, 2.0]  # penalty on the per-cohort random-effect terms
+
+# --- Signature size search ----------------------------------------------------
+# Candidate omics feature counts; the best is chosen per fold by inner CV.
+selection:
+  feature_counts: [5, 10, 20]
+
+# --- Cross-validation ---------------------------------------------------------
+evaluation:
+  outer_folds: 5          # ignored when cohort_validation: leave_one_cohort_out
+  inner_folds: 3          # inner CV used for parameter + feature-count selection
+  primary_metric: harrell_c
+  # stratified_kfold (default) balances outer folds on cohort x event status, so every
+  # cohort is represented in every training fold. leave_one_cohort_out instead trains on
+  # all but one cohort and tests on the held-out one: that measures how well a signature
+  # TRANSFERS to an unseen cohort, not how it performs on the pooled training population.
+  # cohort_validation: stratified_kfold
+
+# --- Execution ----------------------------------------------------------------
+execution:
+  seed: 42
+  # resume_run_id: my-run-2024-06  # reuse a prior SLURM run's per-fold cache
+  slurm:
+    cpus: 4               # -> #SBATCH --cpus-per-task
+    memory: 16G           # -> #SBATCH --mem
+    time: "04:00:00"      # -> #SBATCH --time
+    # partition: gpu                 # -> #SBATCH --partition (optional)
+    # gres: "gpu:1"                  # -> #SBATCH --gres (optional; deep methods)
+    # setup:                         # shell lines run before each worker task
+    #   - module load python/3.12
+    #   - source /path/to/.venv/bin/activate
+
+output_dir: ../../results/advanced_multiomics_example

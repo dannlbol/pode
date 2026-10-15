@@ -1,0 +1,68 @@
+# Example PODE config for a medulloblastoma-style cohort.
+# Every field is optional; omitted fields fall back to dataclass defaults.
+# This reproduces the original notebook behaviour on the training CSVs while
+# staying fully data-agnostic - it only references column *patterns*, not a
+# fixed schema.
+
+schema:
+  max_cardinality_for_discrete: 20
+  # Methylation beta-value columns ("cg...") are forced to continuous floats.
+  continuous_prefixes: ["cg"]
+  # Identifier columns (unique row tags like Sample_ID, Basename, sentrix.id) are
+  # auto-detected and dropped before modelling. Tune or disable here:
+  # detect_identifiers: true
+  # identifier_unique_fraction: 0.95
+  # identifier_patterns: ["*_id", "*_ID", "ID", "Sample_ID", "*Basename*", "sentrix*"]
+  # Survival pairing uses *_Time / *_Status suffixes by default, which matches
+  # OS_Time / OS_Status. Override individual columns here if auto-detection is
+  # wrong, e.g.:
+  # type_overrides:
+  #   ConsensusMYC: categorical
+
+data:
+  # Drop progression-free-survival columns and a metadata column.
+  drop_patterns: ["PFS_*"]
+  drop_columns: ["MethGroup"]
+  # Administrative censoring horizon (years).
+  censor_time_threshold: 10.0
+  # Rows missing the primary survival pair are dropped automatically; add more
+  # required columns here if needed.
+  require_columns: []
+  # Quality filtering (1.0 / 0 = effectively off).
+  max_na_fraction: 0.7
+  min_category_count: 0
+
+synthesizer:
+  epochs: 1500
+  batch_size: 250
+  embedding_dim: 64
+  compress_dims: [256, 256]
+  decompress_dims: [256, 256]
+  l2scale: 1.0e-5
+  loss_factor: 2
+  verbose: true
+
+objective:
+  # Penalty weights (lower composite = better). Available metric names:
+  # hr_mae, tvd_mean, surv_prob_diff_5yr, logrank_dissim, quality_penalty.
+  weights:
+    hr_mae: 1.0
+    tvd_mean: 1.0
+    surv_prob_diff_5yr: 1.0
+  survival_timepoint: 5.0
+
+tuning:
+  epochs: 500
+  stability_runs: 3
+  param_grid:
+    batch_size: [250, 500]
+    embedding_dim: [64, 128]
+    compress_dims: [[128, 128], [256, 256]]
+    decompress_dims: [[128, 128], [256, 256]]
+    l2scale: [1.0e-5, 1.0e-6]
+
+adjustment:
+  enabled: false
+  method: event_conversion
+  timepoint: 5.0
+  stratify_col: null

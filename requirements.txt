@@ -1,0 +1,30 @@
+# PODE requirements - pinned to match the original generative_sim environment.
+# Core data science
+pandas==2.2.3
+numpy==2.1.3
+scipy==1.15.2
+scikit-learn==1.6.1
+
+# Config
+pyyaml==6.0.2
+
+# Visualization
+matplotlib==3.10.3
+seaborn==0.13.2
+
+# Synthetic data generation (SDV / TVAE backend)
+sdv==1.25.0
+sdmetrics==0.22.0
+
+# Survival analysis
+lifelines==0.30.0
+
+# Deep learning (TVAE backend)
+torch==2.6.0
+
+# Utilities
+tqdm==4.67.1
+threadpoolctl>=3.1
+
+# Dev / testing
+pytest>=7.0

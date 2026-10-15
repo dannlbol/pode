@@ -1,0 +1,38 @@
+Package: prognostk
+Title: Generic Prognostic Figures, Metrics and Risk Stratification
+Version: 0.1.0
+Authors@R:
+    person("Dan", "Williamson", email = "dannlbol@users.noreply.github.com", role = c("aut", "cre"))
+Description: A configuration-driven toolkit for survival / biomarker prognosis
+    studies. Provides reusable functions for prognostic metrics (Cox modelling,
+    bootstrapped survival prediction with confidence intervals, risk-group
+    assignment, data-driven cutoff optimisation, external validation and
+    calibration) and publication figures (oncoplots, distribution plots,
+    Kaplan-Meier curves, forest plots and calibration curves). All dataset
+    specifics (column names, survival horizon, thresholds, palettes) are driven
+    by an editable YAML config so the same code applies to any cohort.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.0)
+Imports:
+    yaml,
+    survival,
+    rlang,
+    ggplot2,
+    scales,
+    boot
+Suggests:
+    survminer,
+    ggpubr,
+    ggridges,
+    ggbeeswarm,
+    patchwork,
+    ComplexHeatmap,
+    circlize,
+    grid,
+    gridExtra,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

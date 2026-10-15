@@ -1,0 +1,112 @@
+# Augmentation benchmark: fully commented template
+# (pode synthesis augment benchmark --augment-config <this file> ...).
+#
+# Copy this file for a new study and edit it. Every key is optional; omitted
+# keys take the defaults in pode/augmentation/config.py. Check what a config
+# resolves to against your data, without fitting anything:
+#   pode synthesis augment benchmark --data TABLE --config PODE_CFG --augment-config THIS --dry-run
+# Worked example: toy.example.yaml (minutes).
+
+seed: 42
+n_jobs: 4                 # max CPU cores (shared server: keep it modest); -1 = all
+device: auto              # TVAE / compressor fits: auto | cpu | cuda
+id_column: null           # patient id: kept through prep, never synthesised, written to splits.csv
+
+# ---- endpoint ---------------------------------------------------------------------
+endpoint:
+  time: null              # null -> the schema's primary survival pair (e.g. OS_Time)
+  event: null             # (e.g. OS_Status, 1 = event)
+  horizon: 60             # prediction horizon, in the units of `time`
+
+# ---- split first ------------------------------------------------------------------
+splits:
+  folds: 5
+  repeats: 5              # 5x5 = 25 paired comparisons; use fewer for exploration
+  stratify: []            # columns stratified on besides the event, e.g. [Cohort]
+  group_column: null      # rows sharing this value (patient, family) never straddle a split
+external:                 # rows held out entirely and scored as an external cohort
+  column: null            #   e.g. Cohort
+  values: []              #   e.g. [ValidationSite]
+# (or pass a separate table: --external external.csv)
+
+# ---- generator --------------------------------------------------------------------
+generator:
+  backend: tvae           # tvae: the TVAE models the table | hybrid: matrix -> latents -> TVAE -> decode
+  exclude_columns: []     # never synthesised: ids, cohort labels, post-outcome or treatment-response columns
+  synthetic_strata: own   # own: synthetic rows get their own Cox stratum | generated: use synthesised labels
+  synthetic_label: __synthetic__
+  epochs: null            # null -> the PODE config (--config) epochs
+  pool_factor: 2.0        # pool = pool_factor * max(ratios) * n_train rows per split and strategy
+  cache: true             # reuse per-split models on re-runs (keyed on the exact training rows)
+  constraints:            # synthetic rows breaking these are dropped and counted (survival time > 0 always)
+    ranges: {}            #   {Age: {min: 0, max: 21}}
+    positive: []          #   [Dose]
+    ordered: []           #   [[PFS_Time, OS_Time]]   (first <= second)
+    forbid: []            #   [{Metastases: "Yes", Stage: "I"}]
+  # backend: hybrid only, for omics matrices (thousands of features):
+  hybrid:
+    matrix_columns: []    # globs, e.g. ["cg*"]; never given to the TVAE
+    matrix_kind: methylation   # methylation (betas) | expression | copy_number
+    compressor_config: null    # selected_config.json from `pode synthesis hybrid tune`
+    compressor: {}        # or settings/overrides: {compressor: survival_vae|pca, n_latent: 8, epochs: 100, ...}
+    latent_prefix: methylation_latent_
+    residual_noise: true  # add per-feature reconstruction-residual noise (decoder means are too smooth)
+    fidelity_top_features: 500
+
+# ---- modelling --------------------------------------------------------------------
+features: []              # model features (globs); empty -> every generated non-outcome column
+strata: []                # Cox baseline strata (metacpg_fixed, metacpg_search, cox_ph), e.g. [Cohort, AgeStratum]
+subgroups: []             # columns for the subgroup audit, e.g. [Metastases, Subgroup]
+min_subgroup_n: 15
+min_subgroup_events: 5
+net_benefit_thresholds: [0.3, 0.5, 0.7]   # risk of an event by the horizon
+
+ratios: [0.25, 0.5, 1.0, 2.0]   # synthetic rows per real training row
+draws: 3                        # random subsamples of the pool per (split, strategy, ratio)
+
+# Strategy kinds: tvae_natural | tvae_targeted | tvae_subgroup | duplicate | jitter | weight.
+# `target` uses the --conditions-config grammar: {equals: {...}, ranges: {col: {min, max}}},
+# or {groups: [{proportion, equals, ranges}, ...]} for mixtures. Give each a unique `label`.
+strategies:
+  - tvae_natural
+  - {kind: tvae_targeted, label: tvae_events, target: {equals: {OS_Status: 1}}}
+  # - {kind: tvae_subgroup, params: {columns: [Subgroup], target_count: match_largest}}
+  # - kind: tvae_targeted
+  #   label: tvae_mplus_balanced
+  #   target: {groups: [{proportion: 0.5, equals: {Metastases: "Yes"}, ranges: {OS_Time: {min: 24, max: 1000}}},
+  #                     {proportion: 0.5, equals: {Metastases: "Yes"}}]}
+  - {kind: duplicate, label: duplicate_events, target: {equals: {OS_Status: 1}}}
+  - {kind: jitter, params: {sd_frac: 0.1}}
+  # - {kind: weight, label: weight_events, target: {equals: {OS_Status: 1}}}   # cox_ph / logistic only
+
+# Model kinds: coxnet | cox_ph | logistic_landmark | metacpg_fixed | metacpg_search.
+# features: globs (default: the top-level `features`). Common params for coxnet,
+# cox_ph and logistic_landmark (and metacpg_fixed):
+#   m_value_columns: ["cg*"]        convert methylation betas to M-values
+#   top_variance: 2000              keep the k most variable of top_variance_columns,
+#   top_variance_columns: ["cg*"]   chosen on each fit's real training rows
+models:
+  - coxnet                      # params: l1_ratio (0.5), inner_folds (3)
+  - cox_ph                      # params: penalizer (0.1), l1_ratio (0)
+  # - logistic_landmark         # survival past the horizon
+  # - {kind: metacpg_fixed, features: [cg01, cg02, ...], params: {m_value_columns: ["cg*"]}}
+  # - {kind: metacpg_search, label: metacpg_search_35, features: ["cg*"], params: {n: 35, scale: beta}}
+reference_signature: null       # metacpg_search: feature list or MetaCPG model.json, for overlap stats
+
+# ---- efficiency, fidelity, privacy, gates -----------------------------------------
+learning_curve: {enabled: true, fractions: [0.5, 0.75], draws: 3}
+fidelity: true
+privacy: {enabled: true, columns: [], max_synthetic: 2000, rare_k: 3}
+bootstrap: 1000                 # paired bootstrap replicates on the external cohort
+gates:
+  primary_metric: c_harrell
+  noninferiority_margin: 0.01
+  max_abs_delta_slope: 0.10
+  max_delta_ibs: 0.005
+  min_subgroup_delta_c: -0.05
+  max_discriminator_auc: 0.80
+  max_target_tvd: 0.15
+  max_exact_duplicates: 0
+  max_membership_auc: 0.60
+  min_dcr_p5_ratio: 0.80
+plots: true

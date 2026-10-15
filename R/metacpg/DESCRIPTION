@@ -1,0 +1,12 @@
+Package: metaCpG
+Type: Package
+Title: Configurable CpG Survival Metagene Modelling
+Version: 0.2.0
+Authors@R: person("MetaCpG", "Developers", role = c("aut", "cre"), email = "noreply@example.org")
+Description: Searches, extracts and validates CpG survival metagenes locally or with SLURM.
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.3.2
+Imports: jsonlite, meta, parallel, survival, yaml
+Suggests: survivalROC, testthat (>= 3.0.0)
+Config/testthat/edition: 3

@@ -1,0 +1,9 @@
+# Toy federated benchmark: a cohort with a `site` column, e.g. tests/federated make_cohort().
+#   pode federated benchmark --data cohort_with_sites.csv --federated-config configs/federated/toy.example.yaml \
+#       --output-dir runs/federated_toy --quick
+sites: {column: site, loso: [small]}
+generator: {rounds: 20, local_epochs: 5}
+dp: {batch_size: 32}
+evaluation:
+  repeats: 1
+  conditions: [local, exchange, fedavg, fed_dp_eps3, central_fed_tvae, central_copula]

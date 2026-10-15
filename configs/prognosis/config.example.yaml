@@ -1,0 +1,75 @@
+# =============================================================================
+# prognostk configuration — worked example
+# -----------------------------------------------------------------------------
+# A realistic, filled-in example of how the template maps onto a
+# medulloblastoma-like dataset. It matches the synthetic toy cohort in
+# examples/prognosis/ (generate_toy_data.R), which the R examples use.
+# =============================================================================
+
+columns:
+  id: sample_id
+  time: OS_Time
+  status: OS_Status
+  score: metaCpG                       # the precomputed metaCpG / metagene score
+  group: riskGrpBoot
+  covariates: [metaCpG, metastasis, "strata:ConsensusMYC"]
+  categorical: [Sex, Infant, metastasis, Histology, ConsensusMYC, ConsensusMYCN, MethGroup, MNP_Subgroup]
+
+survival:
+  horizon: 5
+  time_unit: years
+  landmark_offset: null                # set to 5 for the G34-late landmark model
+  bootstrap:
+    n: 1000
+    conf: 0.95
+    seed: 42
+
+risk_groups:
+  # illustrative 4-tier scheme (derive yours with optimise_cutoffs())
+  thresholds: [0.87, 0.73, 0.35, 0.16]
+  labels: ["Favorable", "Standard", "High", "VeryHigh", "Incurable"]
+
+palettes:
+  risk:
+    Favorable: "#2E7D32"
+    Standard:  "#66BB6A"
+    High:      "#FFA500"
+    VeryHigh:  "#D32F2F"
+    Incurable: "#7B1FA2"
+  cohort:
+    discovery:  "#08519C"
+    validation: "#D6604D"
+  heatmap: ["#00008B", "#EEE9E9", "#8B0000"]   # darkblue / ivory2 / darkred
+  categorical:
+    Sex:          {M: "#FFFFFF", F: "#000000", Unknown: "#D3D3D3"}
+    Infant:       {"0": "#FFFFFF", "1": "#000000", Unknown: "#D3D3D3"}
+    metastasis:   {"0": "#FFFFFF", "1": "#000000", Unknown: "#D3D3D3"}
+    Histology:    {CLA: "#FFFFFF", LCA: "#000000", DN: "#EE0000", MBEN: "#8B0000", Unknown: "#D3D3D3"}
+    ConsensusMYC: {"0": "#FFFFFF", "1": "#000000", Unknown: "#D3D3D3"}
+    ConsensusMYCN: {"0": "#FFFFFF", "1": "#000000", Unknown: "#D3D3D3"}
+    MethGroup:  {Grp3: "#EEEE00", Grp4: "#228B22"}
+    MNP_Subgroup: {I: "#7D49CB", II: "#AA5883", III: "#B79744", IV: "#EAE733",
+                   V: "#B2C944", VI: "#81AD95", VII: "#C4D4EC", VIII: "#2A7045", Unknown: "#D3D3D3"}
+
+oncoplot:
+  tracks:
+    - {name: Age, column: Age, type: points, baseline: 3, ylim: [0, 16]}
+    - {name: OS,  column: OS_Time, type: points, baseline: 5, ylim: [0, 10], status_col: OS_Status}
+    - {name: Sex,        column: Sex,          type: categorical}
+    - {name: Infant,     column: Infant,       type: categorical}
+    - {name: Metastatic, column: metastasis,   type: categorical}
+    - {name: Histology,  column: Histology,    type: categorical}
+    - {name: MYC,        column: ConsensusMYC, type: categorical}
+    - {name: MYCN,       column: ConsensusMYCN,type: categorical}
+    - {name: Group,      column: MethGroup,  type: categorical}
+    - {name: Subgroup,   column: MNP_Subgroup, type: categorical}
+    - {name: metaCpG,    column: metaCpG,      type: line}
+
+figure:
+  page:
+    width_in: 7.09
+    height_in: 10.51
+    base_size: 8
+  device: pdf
+  dpi: 300
+  outdir: ./figures

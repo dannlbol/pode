@@ -1,0 +1,70 @@
+# Federated learning config (`pode federated ... --federated-config THIS.yaml`).
+# Every option, with its default. The TVAE *architecture* (layer sizes, batch
+# size, loss factor, l2) comes from the PODE config passed with --config.
+seed: 0
+n_jobs: 4                  # max CPU cores (threads, BLAS, torch); keep modest on shared servers
+device: auto               # auto | cpu | cuda (federated TVAE fits)
+
+sites:
+  column: site             # column whose levels are the sites (simulation mode)
+  include: []              # sites taking part; empty = every level
+  min_site_n: 10           # refuse smaller sites
+  loso: []                 # sites held out of everything in the leave-one-site-out arm
+
+generator:                 # the federated TVAE
+  rounds: 60               # federation rounds
+  local_epochs: 5          # epochs per site per round (budget = rounds x local_epochs)
+  algorithm: fedavg        # fedavg | fedprox
+  prox_mu: 0.01            # FedProx proximal weight (non-IID sites drift less)
+  weighting: n             # n | sqrt_n | uniform | capped (n, but no site above cap_fraction)
+  cap_fraction: 0.5
+  secure_aggregation: true # pairwise-masked sums: the coordinator sees only the aggregate
+  site_in_model: false     # model the site as a column (sample per site)
+  personalise_epochs: 0    # >0: each site fine-tunes its own copy after federation
+  learning_rate: 0.001
+  exclude_columns: []      # globs never given to the generator (ids, post-outcome fields)
+  constraints: {}          # plausibility rules: ranges / positive / ordered / forbid
+
+transformer:               # shared column encoder, built from per-site summaries only
+  min_cell: 3              # categories seen < min_cell times at a site are pooled into rare_label
+  rare_label: __rare__
+  bins: 50                 # histogram bins per numeric column
+  range_quantiles: [0.01, 0.99]   # per-site quantiles setting the shared numeric range
+  bounds: {}               # public numeric bounds {col: [lo, hi]} (needed for a fully DP encoder)
+  categories: {}           # public category vocabularies {col: [levels]}
+  pseudo_rows: 5000
+  max_clusters: 10
+
+dp:                        # DP-SGD (needs: pip install -e '.[federated]')
+  enabled: false
+  noise_multiplier: null   # either a fixed noise multiplier ...
+  target_epsilon: null     # ... or a per-site epsilon to solve for
+  delta: null              # null -> min(1e-5, 1/(10 n_site))
+  max_grad_norm: 1.0       # per-patient gradient clip C
+  batch_size: 64           # expected Poisson batch (sampling rate B / n_site)
+  transformer_epsilon: 0.5 # Laplace budget for the encoder summaries
+  accountant: rdp          # rdp | prv
+
+exchange:                  # local TVAEs + privacy-gated release
+  privacy_config: null     # pode.privacy YAML for the release gate
+  release_verdicts: [PASS]
+  generator: fed_tvae      # fed_tvae (this package, DP-capable) | sdv_tvae (PODE's TVAEGenerator)
+  holdout_frac: 0.3
+  num_samples: null        # null -> as many as the site's training rows
+
+evaluation:                # `pode federated benchmark`
+  time: null               # null -> the schema's primary survival pair
+  event: null
+  horizon: null            # null -> median observed time
+  features: []             # model predictors (globs); empty = all generator columns
+  models:                  # downstream prognostic models (augmentation ModelSpecs)
+    - {kind: cox_ph, params: {penalizer: 0.1}}
+  holdout_frac: 0.3        # share of each site kept as real test patients
+  repeats: 3
+  n_synthetic: null        # synthetic rows per TSTR fit; null -> the condition's real training size
+  conditions: [local, exchange, fedavg, fedprox, fed_personalised, fed_dp_eps3,
+               central_fed_tvae, central_sdv_tvae, central_copula]   # fed_dp_eps<E>, e.g. fed_dp_eps0p5
+  n_bootstrap: 200
+  non_inferiority_margin: 0.02
+  privacy_config: null     # pode.privacy YAML for the per-site assessments
+  max_discriminator_auc: 0.8

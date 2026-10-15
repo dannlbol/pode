@@ -1,0 +1,72 @@
+# pode_mantis config template.
+#
+# This is pode_mantis's OWN config -- it drives every `pode mantis <command>`.
+# It is DISTINCT from the MANTIS reference repo's own config.yaml, which
+# `pode mantis generate-config` *produces* as an output artefact for
+# `infer`/`evaluate`/`plot` to hand to the reference implementation.
+#
+# See configs/mantis/config.schema.md for the full field reference, and
+# docs/mantis/README.md for the required external setup (reference repo
+# clone, isolated MANTIS environment, Zenodo assets, R/Bioconductor) -- this
+# theme is inert without those in place.
+
+paths:
+  # Where you cloned+checked-out sstefan01/methylation-survival (v1.0.0).
+  reference_repo: null
+  # Interpreter inside the ISOLATED external MANTIS environment. Never PODE's
+  # own interpreter -- MANTIS's pinned deps (sparselinear, torch-scatter,
+  # torch-sparse, scikit-survival==0.23.1) cannot coexist with PODE's own.
+  mantis_python: null
+  # Directory holding the Zenodo record 20818365 assets: conn_mat_beta.csv,
+  # mantismb_model_weights.pt, the released CpG/gene order lists,
+  # training_probe_means.csv.
+  zenodo_assets_dir: null
+
+# `pode mantis prepare-beta` -- reindex a beta matrix to MANTIS's exact
+# 357,692-CpG order.
+beta:
+  cohort_path: null                # your cohort's beta matrix (csv/tsv/parquet)
+  orientation: samples_by_features  # samples_by_features | features_by_samples
+  cpg_order_path: null             # <zenodo_assets_dir>/beta_cpg_order.txt
+  training_means_path: null        # <zenodo_assets_dir>/training_probe_means.csv
+  output_dir: outputs/mantis/beta
+
+# `pode mantis prepare-cnv` -- CNV feature calling via R/conumee2 (subprocess
+# to Rscript; requires Bioconductor's minfi+conumee2 installed, see
+# docs/mantis/README.md). NO Python equivalent exists for this step.
+cnv:
+  msets: {}                        # cohort_name: path-to-Mset.RDS (one or more)
+  control_mset: null               # REQUIRED, no default -- see docs/mantis/README.md
+  gene_order_path: null            # <zenodo_assets_dir>/cnv_gene_order.txt
+  noise_threshold: null            # REQUIRED, no default -- see docs/mantis/README.md
+  array_type: "450k"               # 450k | EPIC -- never mix array types in one run
+  phenotype_path: null             # optional: MYC/MYCN ground-truth sheet for QC
+  output_dir: outputs/mantis/cnv
+
+# `pode mantis prepare-survival` -- build MANTIS's survival/clinical CSV.
+survival:
+  clinical_path: null
+  id_column: null
+  time_column: null                # OS time
+  event_column: null               # OS event, 1=death
+  pfs_time_column: null            # optional, needed only for endpoint: pfs
+  pfs_event_column: null
+  metastasis_column: null          # REQUIRED -- metastasis is a required model input,
+                                    # coded 0/1 in your data (MANTIS recodes 0->-1 itself,
+                                    # do not pre-recode)
+  output_dir: outputs/mantis/survival
+
+# `pode mantis generate-config` -- assemble the reference repo's own config.yaml.
+reference_config:
+  endpoint: os                     # os | pfs -- sets BOTH time_column/event_column AND
+                                    # os_time_column/os_event_column consistently, closing
+                                    # a documented evaluate.py footgun by construction
+  fixed_sections_from: null        # the reference repo's own shipped config.yaml, to copy
+                                    # model:/time_bins/feature_types/metastasis_recoding from
+  output_path: outputs/mantis/mantis_config.yaml
+
+# `pode mantis infer` -- runs the reference inference.py.
+inference:
+  model_weights_path: null         # defaults to <zenodo_assets_dir>/mantismb_model_weights.pt
+  output_predictions_path: outputs/mantis/predictions.csv
+  batch_size: 64

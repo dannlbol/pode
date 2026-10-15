@@ -1,0 +1,66 @@
+# Privacy assessment of TVAE synthetic data for a childhood-cancer cohort
+# (pode synthesis privacy assess|audit --privacy-config ...).
+#
+# The threat model matters more than any threshold: list what a plausible
+# intruder could know about a child (attacker tiers), what would harm the child
+# if disclosed (sensitive), and the rare groups that need their own scrutiny
+# (strata). Column names below are illustrative; globs are allowed.
+# Every key is optional; omitted keys take the defaults in pode/privacy/config.py.
+
+seed: 0
+n_jobs: 4                 # max CPU cores; -1 = all (shared server: keep it modest)
+id_column: sample_id      # labels case-review rows only; never assessed as a feature
+
+# Columns to assess (empty = every non-identifier column shared with the
+# synthetic table) and columns to leave out.
+columns: []
+exclude_columns: []
+
+# Attacker tiers, from weakest to strongest prior knowledge.
+quasi_identifiers:
+  basic:                  # sex, age band, broad tumour class, diagnosis-year band
+    [Sex, AgeGroup, Subgroup]
+  linkage:                # + exact-ish age, subtype, stage/risk group, centre/region, trial
+    [Sex, Age, SubgroupDetail, Metastases, Resection]
+  high_risk:              # + treatment exposures and rare clinical/genomic events
+    [Sex, Age, SubgroupDetail, Metastases, Resection, Radiotherapy, HDChemo]
+
+# Attributes whose disclosure would harm a child: relapse, survival status,
+# germline predisposition, molecular status, rare toxicity...
+sensitive: [OS_Status, OS_Time]
+
+# Rare strata checked separately (diagnosis, subtype, age band, outcome).
+strata: [SubgroupDetail, AgeGroup, Metastases, OS_Status]
+
+# Gower weights: up-weight highly identifying columns so they are not
+# drowned out by many weakly identifying ones (e.g. hundreds of CpGs).
+weights: {}
+#   "cg*": 0.1
+
+numeric_bins: 5           # quantile bins for numeric quasi-identifiers / strata
+rare_k: 5                 # a combination/stratum of <= 5 training patients is "rare"
+max_synthetic: 2000       # synthetic rows assessed (subsampled above this)
+near_copy_quantiles: [0.01, 0.05]
+n_bootstrap: 200
+min_group: 10             # smallest group that gets an AUC / accuracy
+attribute_tolerance: 0.05 # numeric targets: a guess within 5% of the range is "correct"
+review_top_n: 25
+
+gates:
+  max_exact_copies: 0
+  min_dcr_p5_ratio: 0.8
+  max_near_copy_excess: 2.0
+  max_membership_auc: 0.60
+  max_attribute_member_gap: 0.05
+  max_linkage_excess: 0.02
+  max_rare_combo_leaks: 0
+  alpha: 0.01
+
+# `privacy audit`: split -> fit a fresh TVAE on the training share -> assess.
+audit:
+  holdout_frac: 0.3
+  stratify: []            # empty -> the primary survival event column
+  num_samples: null       # null -> as many synthetic rows as training patients
+  repeats: 3              # verdict = worst repeat; single splits are noisy in small cohorts
+  epochs: null            # null -> the PODE config's synthesizer.epochs
+  device: auto            # auto | cpu | cuda

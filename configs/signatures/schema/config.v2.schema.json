@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pode.example/signatures/config.v2.schema.json",
+  "title": "PODE advanced prognostic signature configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "analysis_id", "phenotype", "omics", "endpoints", "methods", "output_dir"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "analysis_id": {"type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9_.-]+$"},
+    "alignment": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"mode": {"enum": ["sample_id", "row_order"]}, "sample_policy": {"const": "union"}}
+    },
+    "phenotype": {
+      "type": "object", "additionalProperties": false, "required": ["path"],
+      "properties": {
+        "path": {"type": "string"}, "separator": {"type": "string"},
+        "sample_id_column": {"type": "string"},
+        "cohort_column": {
+          "type": "string",
+          "description": "Optional phenotype column naming the source (trial, era, batch) each training sample came from. Cohorts are pooled for training; methods that support it give each cohort its own baseline hazard via a stratified Cox partial likelihood. This does NOT define a train/test split."
+        },
+        "cohort_handling": {
+          "enum": ["warn", "skip"],
+          "default": "warn",
+          "description": "What to do with methods that cannot represent cohort structure (random_survival_forest, gradient_boosted_survival, survival_svm): warn runs them pooled and flags the result, skip excludes them."
+        }
+      }
+    },
+    "omics": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["name", "path"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1}, "path": {"type": "string"},
+          "separator": {"type": "string"},
+          "orientation": {"enum": ["samples_by_features", "features_by_samples"]},
+          "sample_id_column": {"type": "string"},
+          "feature_id_column": {"oneOf": [{"type": "string"}, {"const": "first"}]},
+          "transform": {"enum": ["none", "log1p", "beta_to_m"]},
+          "standardize": {"type": "boolean"}
+        }
+      }
+    },
+    "endpoints": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["name", "time", "status"],
+        "properties": {
+          "name": {"type": "string"}, "time": {"type": "string"}, "status": {"type": "string"},
+          "prediction_time": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "covariates": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["column", "type"],
+        "properties": {
+          "column": {"type": "string"}, "type": {"enum": ["numeric", "categorical"]},
+          "mode": {"enum": ["adjust", "strata"]}, "penalized": {"const": false}
+        }
+      }
+    },
+    "methods": {
+      "type": "object", "additionalProperties": false, "required": ["enabled"],
+      "properties": {
+        "enabled": {"type": "array", "minItems": 1, "items": {"type": "string"}, "uniqueItems": true},
+        "config": {"type": "object", "additionalProperties": {"type": "object"}}
+      }
+    },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"feature_counts": {"type": "array", "minItems": 1, "items": {"type": "integer", "minimum": 1}}}
+    },
+    "evaluation": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "outer_folds": {"type": "integer", "minimum": 2}, "inner_folds": {"type": "integer", "minimum": 2},
+        "primary_metric": {"const": "harrell_c"},
+        "cohort_validation": {
+          "enum": ["stratified_kfold", "leave_one_cohort_out"],
+          "default": "stratified_kfold",
+          "description": "Outer validation scheme. stratified_kfold balances folds on cohort x event status. leave_one_cohort_out trains on all but one cohort and tests on the held-out one, measuring cross-cohort transfer rather than performance on the pooled training population; it requires phenotype.cohort_column and ignores outer_folds."
+        }
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "seed": {"type": "integer"}, "resume_run_id": {"type": ["string", "null"]},
+        "slurm": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "output_dir": {"type": "string"}
+  }
+}

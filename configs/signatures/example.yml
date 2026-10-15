@@ -1,0 +1,45 @@
+schema_version: 1
+methodology: legacy_exact
+analysis_id: example_single_endpoint
+matrix:
+  path: /path/to/beta_matrix.csv
+  orientation: features_by_samples
+  scale: beta
+  feature_id_column: first
+phenotype:
+  path: /path/to/phenotype.csv
+  sample_id_column: sample_id
+endpoints:
+  - name: discovery
+    time: survival_time_days
+    status: event
+    prediction_time: 1095
+covariates:
+  - column: molecular_group
+    type: categorical
+    mode: strata
+final_model:
+  weight_refit: covariate_aware
+search:
+  min_features: 5
+  max_features: 60
+  step: 1
+  cross_validation: loo
+selection:
+  mode: manual
+  feature_count: null
+execution:
+  workers: 4
+  seed: 1
+  resume_run_id: null
+  slurm:
+    cpus: 4
+    memory: 32G
+    time: "24:00:00"
+    partition: compute
+    setup:
+      - module load R/4.5.1
+annotation: null
+validation:
+  allow_unmatched_samples: false
+output_dir: ../results/example_single_endpoint

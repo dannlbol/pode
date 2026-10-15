@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PODE run outputs. Default output folders are listed explicitly: a blanket
+# pode_*/ would also ignore the pode_foundation/ and pode_mantis/ source trees.
+# Several of these hold real patient rows or IDs after a run on real data.
+pode_output/
+pode_eval/
+pode_tuning/
+pode_privacy/
+pode_privacy_audit/
+pode_imputed/
+pode_imputer/
+pode_augmented/
+pode_augment_benchmark/
+pode_impute_benchmark/
+pode_federated_benchmark/
+pode_federated_exchange/
+pode_federated_sample/
+pode_federated_tvae/
+# Raw/intermediate omics objects: never commit
+*.rds
+*.RDS
+*.idat
+seed_log_*.json
+*.pkl
+out/
+tuning/
+detected_schema.yaml
+prepared_schema.yaml
+trained/
+models/
+eval/
+pode_model/
+trained_hybrid/
+tuned_hybrid/
+generated_hybrid_tuned/
+trained_hybrid_tuned/
+
+# synthvae front end outputs / local data (root-anchored so the synthvae/data
+# package is NOT ignored)
+/runs/
+/data/
+/data_toy/
+*.pt
+script_commands.sh
+
+# Signatures (metacpg) / Prognosis (prognostk) outputs
+results/
+figures/
+example_output/
+example_output_py/
+
+# R build & environment artefacts (the R/ source tree itself is tracked)
+*.Rcheck/
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+R/**/renv/library/
+R/**/renv/local/
+R/**/renv/staging/
+R/**/*.tar.gz
+
+# Editors
+.vscode/
+
+# OS
+.DS_Store
+pode.code-workspace
+Rplots.pdf

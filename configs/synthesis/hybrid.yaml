@@ -1,0 +1,49 @@
+# Default configuration for the hybrid pipeline.
+# Consumed by your own driver code; scripts/run_hybrid.py currently uses CLI flags,
+# but this file documents the recommended production settings in one place.
+
+data:
+  categorical: [stage, sex]     # clinical columns to treat as categorical
+  matrix_kind: expression       # expression | methylation
+  n_top_genes: 2000             # HVG selection; null keeps all genes
+  log1p: false                  # apply log1p (set true for raw-ish counts)
+  beta_epsilon: 0.000001        # methylation beta-value clipping before logit transform
+
+compressor:
+  kind: survival_vae            # pca | survival_vae
+  n_latent: 32
+  # survival_vae specifics
+  encoder_hidden: [512, 256]
+  decoder_hidden: [256, 512]
+  survival_hidden: [64]
+  n_time_bins: 20
+  time_scheme: quantile         # quantile | equidistant
+  dropout: 0.1
+  beta_max: 1.0                 # KL weight ceiling; SWEEP THIS jointly with w_surv
+  free_bits: 0.02               # nats/dim floor; protects survival-relevant dims
+  kl_warmup_epochs: 20
+  uncertainty_weighting: true   # learn recon vs survival weights
+  w_recon: 1.0                  # used only if uncertainty_weighting=false
+  w_surv: 1.0
+  learn_obs_scale: true
+  lr: 0.001
+  weight_decay: 0.00001
+  batch_size: 128
+  max_epochs: 200
+  patience: 20
+
+synthesizer:
+  kind: sdv                     # sdv | gmm
+  epochs: 300
+
+evaluation:
+  test_fraction: 0.3
+  prefer_lifelines: true
+
+# Suggested sweep for the survival/regularisation interaction (the setting the
+# literature says matters most). Run the grid, pick by concordance_gap + km_iad_late.
+sweeps:
+  beta_max: [0.1, 0.5, 1.0, 2.0, 4.0]
+  w_surv: [0.5, 1.0, 2.0, 4.0]
+  free_bits: [0.0, 0.02, 0.05]
+  n_latent: [16, 32, 64]

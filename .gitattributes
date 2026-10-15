@@ -1,0 +1,2 @@
+# private/ holds study-specific material; git archive (the public release) skips it.
+private/ export-ignore
